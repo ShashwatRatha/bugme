@@ -1,0 +1,13 @@
+#!/bin/zsh
+
+echo "Validating code before push..."
+
+# check for successful build
+zsh ./scripts/build > /dev/null 2>&1
+if [[ $? -ne 0 ]]; then
+    echo "Build unsuccessful. Verify code for errors."
+    echo
+    exit 1
+fi
+echo "Pre-push validation successful. Proceeding to push..."
+exit 0

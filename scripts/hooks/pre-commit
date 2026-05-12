@@ -1,0 +1,14 @@
+#!/bin/zsh
+
+# check for formatting
+find . -regex ".*\.\(c\|h\|cpp\|hpp\)" -exec \
+clang-format --style=file --Werror --dry-run {} + > /dev/null 2>&1
+
+if [[ $? -ne 0 ]]; then
+    echo "Formatting required. Run formatting script before committing."
+    echo
+    exit 2
+fi
+
+echo "Pre-commit validation successful. Proceeding to commit..."
+exit 0

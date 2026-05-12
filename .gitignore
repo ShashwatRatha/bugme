@@ -1,0 +1,8 @@
+tests/
+bin/
+build/
+*.o
+*.out
+.cache/
+further-work.txt
+compile_commands.json

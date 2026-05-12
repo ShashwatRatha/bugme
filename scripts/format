@@ -1,0 +1,4 @@
+#!/bin/zsh
+
+[[ -f .clang-format ]] || clang-format -style=google -dump-config > .clang-format
+find src include tests -regex ".*\.\(c\|h\|cpp\|hpp\)" -exec clang-format -i {} +

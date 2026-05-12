@@ -1,0 +1,4 @@
+#!/bin/zsh
+
+cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -B build && make -C build
+ln -sf build/compile_commands.json .
