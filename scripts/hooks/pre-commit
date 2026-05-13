@@ -1,12 +1,12 @@
 #!/bin/zsh
 
 # check for formatting
-find . -regex ".*\.\(c\|h\|cpp\|hpp\)" -exec \
+[[ -f .clang-format ]] && find src tests include -regex ".*\.\(c\|h\|cpp\|hpp\)" -exec \
 clang-format --style=file --Werror --dry-run {} + > /dev/null 2>&1
 
 if [[ $? -ne 0 ]]; then
     echo "Formatting required. Run formatting script before committing."
-    echo
+    echo "Commit aborted."
     exit 2
 fi
 

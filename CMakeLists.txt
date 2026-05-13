@@ -8,4 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
 
+file(GLOB SOURCES "src/*.c" "src/*.cpp")
+add_executable(bugme ${SOURCES})
+
 target_include_directories(bugme PRIVATE include)
