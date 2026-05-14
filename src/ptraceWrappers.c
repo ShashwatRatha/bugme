@@ -26,7 +26,7 @@ long ptSingleStep(pid_t pid) { return ptrace(PTRACE_SINGLESTEP, pid); }
 
 // Read all registers
 long ptGetRegs(pid_t pid, struct user_regs_struct *regs) {
-  return ptrace(PTRACE_GETREGS, pid, NULL, &regs);
+  return ptrace(PTRACE_GETREGS, pid, NULL, regs);
 }
 
 // Write all registers

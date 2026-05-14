@@ -1,0 +1,45 @@
+#ifndef REGISTERS_H_
+#define REGISTERS_H_
+
+#include <sys/types.h>
+#include <sys/user.h>
+
+#include <cstdint>
+
+enum class Regs {
+  rax,
+  rbx,
+  rcx,
+  rdx,
+  rdi,
+  rsi,
+  rsp,
+  rbp,
+  r8,
+  r9,
+  r10,
+  r11,
+  r12,
+  r13,
+  r14,
+  r15,
+  eflags,
+  rip
+};
+
+class Registers {
+ public:
+  Registers(pid_t pid);
+
+  void getRegs();
+  void setRegs(user_regs_struct& regs);
+  uint64_t getRegister(Regs reg) const;
+  void setRegister(const Regs reg, uint64_t value);
+  void renderRegs() const;
+
+ private:
+  pid_t mPid;
+  user_regs_struct mRegs;
+};
+
+#endif

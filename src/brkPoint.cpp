@@ -5,9 +5,9 @@
 BreakPoint::BreakPoint(pid_t pid, std::uint64_t addr)
     : mPid(pid), mAddr(addr), mReadByte(0), mEnabled(false) {}
 
-bool BreakPoint::isEnabled() { return mEnabled; }
+bool BreakPoint::isEnabled() const { return mEnabled; }
 
-std::uint64_t BreakPoint::getAddr() { return mAddr; }
+std::uint64_t BreakPoint::getAddr() const { return mAddr; }
 
 void BreakPoint::enableBP() {
   auto readWord = ptReadMem(mPid, mAddr);

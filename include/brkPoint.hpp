@@ -16,8 +16,8 @@ class BreakPoint {
   ~BreakPoint() = default;
 
   // getters
-  bool isEnabled();
-  std::uint64_t getAddr();
+  bool isEnabled() const;
+  std::uint64_t getAddr() const;
 
   // methods
   void enableBP();
