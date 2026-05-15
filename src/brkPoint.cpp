@@ -1,5 +1,9 @@
 #include "brkPoint.hpp"
 
+#include <stdlib.h>
+
+#include <cstdio>
+
 #include "ptraceWrappers.h"
 
 BreakPoint::BreakPoint(pid_t pid, std::uint64_t addr)
@@ -13,7 +17,10 @@ void BreakPoint::enableBP() {
   auto readWord = ptReadMem(mPid, mAddr);
   mReadByte = static_cast<std::uint8_t>(readWord & 0xff);
   auto writeWord = ((readWord & ~(0xffULL)) | 0xcc);
-  ptWriteMem(mPid, mAddr, writeWord);
+  if (ptWriteMem(mPid, mAddr, writeWord) == -1) {
+    std::perror("BreakPoint not enabled");
+    exit(-1);
+  }
   mEnabled = true;
 }
 
@@ -21,6 +28,9 @@ void BreakPoint::disableBP() {
   auto readWord = ptReadMem(mPid, mAddr);
   auto writeWord =
       ((readWord & ~(0xffULL)) | static_cast<std::uint64_t>(mReadByte));
-  ptWriteMem(mPid, mAddr, writeWord);
+  if (ptWriteMem(mPid, mAddr, writeWord) == -1) {
+    std::perror("BreakPoint not disabled");
+    exit(-1);
+  }
   mEnabled = false;
 }

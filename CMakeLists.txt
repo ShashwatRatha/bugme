@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(BugMe VERSION 1.0 LANGUAGES C CXX)
+project(BugMe VERSION 2.0 LANGUAGES C CXX)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -8,7 +8,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
 
+find_package(PkgConfig)
+pkg_check_modules(LIBELF REQUIRED libelf)
+
 file(GLOB SOURCES "src/*.c" "src/*.cpp")
 add_executable(bugme ${SOURCES})
 
-target_include_directories(bugme PRIVATE include)
+target_include_directories(bugme PRIVATE include ${LIBELF_INCLUDE_DIRS})
+target_link_libraries(bugme PRIVATE ${LIBELF_LIBRARIES})

@@ -36,10 +36,18 @@ static const Register RegDesc[] = {
 
 Registers::Registers(pid_t pid) : mPid(pid), mRegs{} {}
 
-void Registers::getRegs() { ptGetRegs(mPid, &mRegs); }
+void Registers::getRegs() {
+  if (ptGetRegs(mPid, &mRegs) == -1) {
+    std::perror("registers");
+    exit(1);
+  }
+}
 
 void Registers::setRegs(user_regs_struct &regs) {
-  ptSetRegs(mPid, &regs);
+  if (ptSetRegs(mPid, &regs) == -1) {
+    std::perror("registers");
+    exit(1);
+  }
   mRegs = regs;
 }
 
@@ -66,8 +74,16 @@ void Registers::setRegister(const Regs regIdx, uint64_t value) {
 }
 
 void Registers::renderRegs() const {
-  for (const auto &reg : RegDesc) {
-    uint64_t val = *(uint64_t *)((uint8_t *)&mRegs + reg.offset);
-    printf("%-10s 0x%lx\n", reg.name, val);
+  printf("%-6s 0x%018lx\n", "rip", getRegister(Regs::rip));
+  for (auto i = 0; i < 4; i++) {
+    printf("%-6s 0x%-22.18lx", RegDesc[4 * i].name,
+           getRegister(RegDesc[4 * i].regIdx));
+    printf("%-6s 0x%-22.18lx", RegDesc[4 * i + 1].name,
+           getRegister(RegDesc[4 * i + 1].regIdx));
+    printf("%-6s 0x%-22.18lx", RegDesc[4 * i + 2].name,
+           getRegister(RegDesc[4 * i + 2].regIdx));
+    printf("%-6s 0x%-22.18lx", RegDesc[4 * i + 3].name,
+           getRegister(RegDesc[4 * i + 3].regIdx));
+    putchar('\n');
   }
 }

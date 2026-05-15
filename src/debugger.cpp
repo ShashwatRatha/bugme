@@ -18,7 +18,7 @@
 #include "registers.hpp"
 
 Debugger::Debugger(const char *program, char *const argv[])
-    : mPid(ptSpawn(program, argv)), mRegs(mPid), mBrkPoints() {}
+    : mPid(ptSpawn(program, argv)), mElf(program), mRegs(mPid), mBrkPoints() {}
 
 void Debugger::run() {
   std::string line;
@@ -47,6 +47,32 @@ void Debugger::setBP(uint64_t addr) {
   }
 }
 
+void Debugger::setBP(const std::string &symName) {
+  if (mElf.isPIE()) {
+    auto addr = mElf.getLoadAddress(mPid);
+    if (!addr.has_value()) {
+      std::cerr << "Binary load address unresolved\n";
+      return;
+    }
+    auto offset = mElf.getSymbolOffset(symName);
+    if (!offset.has_value()) {
+      std::cerr << "Symbol " << symName << " is undefined.\n";
+      return;
+    }
+    auto [it, inserted] =
+        mBrkPoints.emplace(*offset + *addr, BreakPoint(mPid, *addr + *offset));
+    if (inserted) it->second.enableBP();
+  } else {
+    auto addr = mElf.getSymbolOffset(symName);
+    if (!addr.has_value()) {
+      std::cerr << "Symbol " << symName << " is undefined.\n";
+      return;
+    }
+    auto [it, inserted] = mBrkPoints.emplace(*addr, BreakPoint(mPid, *addr));
+    if (inserted) it->second.enableBP();
+  }
+}
+
 void Debugger::setRegister(Regs reg, uint64_t value) {
   mRegs.setRegister(reg, value);
 }
@@ -67,7 +93,7 @@ void Debugger::wait() {
 
   if (WIFEXITED(status)) {
     std::cout << "Tracee exited with code: " << WEXITSTATUS(status) << "\n";
-    exit(0);
+    return;
   }
 
   if (WIFSTOPPED(status)) {
@@ -75,7 +101,7 @@ void Debugger::wait() {
   } else if (WIFSIGNALED(status)) {
     int signal = WTERMSIG(status);
     std::cout << "Tracee terminated with signal: " << signal << "\n";
-    exit(0);
+    return;
   }
 }
 
@@ -102,12 +128,28 @@ void Debugger::handleCommand(std::string &line) {
   if (keyW == "cnt") {
     cnt(0);
   } else if (keyW == "brk") {
-    setBP(std::stoull(tokens[1], nullptr, 16));
+    if (tokens.size() != 2) {
+      std::cout << "usage: brk <address or symbol>\n";
+      return;
+    }
+
+    const std::string &target = tokens[1];
+
+    // Check if it looks like a hex address
+    if (target.length() > 2 && target[0] == '0' && target[1] == 'x') {
+      uint64_t addr = std::stoull(target, nullptr, 16);
+      setBP(addr);
+    } else {
+      // Treat as symbol name
+      setBP(target);
+    }
   } else if (keyW == "regs") {
     getRegs();
   } else if (keyW == "q") {
     kill(mPid, SIGTERM);
     exit(0);
+  } else if (keyW == "step") {
+    ptSingleStep(mPid);
   } else {
     std::cout << "Unknown command " << keyW << "\n";
     return;

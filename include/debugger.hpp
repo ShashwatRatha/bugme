@@ -7,6 +7,7 @@
 #include <unordered_map>
 
 #include "brkPoint.hpp"
+#include "elfParser.hpp"
 #include "registers.hpp"
 
 class Debugger {
@@ -16,11 +17,13 @@ class Debugger {
   void cnt(int signal);
   void getRegs();
   void setBP(uint64_t addr);
+  void setBP(const std::string &symName);
   void setRegister(Regs reg, uint64_t value);
 
  private:
   pid_t mPid;
   Registers mRegs;
+  ElfParser mElf;
   std::unordered_map<uint64_t, BreakPoint> mBrkPoints;
 
   void handleTRAP();
