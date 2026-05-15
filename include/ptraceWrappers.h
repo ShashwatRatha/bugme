@@ -5,6 +5,10 @@
 #include <sys/types.h>
 #include <sys/user.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Launch a new traceable process
 pid_t ptSpawn(const char *program, char *const argv[]);
 
@@ -24,5 +28,9 @@ long ptSetRegs(pid_t pid, struct user_regs_struct *regs);
 long ptReadMem(pid_t pid, uint64_t addr);
 // Write a word 'data' at offset 'addr' in process
 long ptWriteMem(pid_t pid, uint64_t addr, long data);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

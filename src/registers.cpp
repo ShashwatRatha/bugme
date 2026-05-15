@@ -57,6 +57,7 @@ void Registers::setRegister(const Regs regIdx, uint64_t value) {
   for (auto reg : RegDesc) {
     if (regIdx == reg.regIdx) {
       *(uint64_t *)((uint8_t *)&mRegs + reg.offset) = value;
+      setRegs(mRegs);
       return;
     }
   }

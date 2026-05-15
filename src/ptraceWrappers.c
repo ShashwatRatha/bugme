@@ -11,18 +11,20 @@
 #include <unistd.h>
 
 // Attach to a running process
-long ptAttach(pid_t pid) { return ptrace(PTRACE_ATTACH, pid); }
+long ptAttach(pid_t pid) { return ptrace(PTRACE_ATTACH, pid, NULL, NULL); }
 
 // Detach from process
-long ptDetach(pid_t pid) { return ptrace(PTRACE_DETACH, pid); }
+long ptDetach(pid_t pid) { return ptrace(PTRACE_DETACH, pid, NULL, NULL); }
 
 // Continue execution
 long ptContinue(pid_t pid, int signal) {
-  return ptrace(PTRACE_CONT, pid, signal);
+  return ptrace(PTRACE_CONT, pid, NULL, (void *)(long)signal);
 }
 
 // Single-step one instruction
-long ptSingleStep(pid_t pid) { return ptrace(PTRACE_SINGLESTEP, pid); }
+long ptSingleStep(pid_t pid) {
+  return ptrace(PTRACE_SINGLESTEP, pid, NULL, NULL);
+}
 
 // Read all registers
 long ptGetRegs(pid_t pid, struct user_regs_struct *regs) {
@@ -31,13 +33,13 @@ long ptGetRegs(pid_t pid, struct user_regs_struct *regs) {
 
 // Write all registers
 long ptSetRegs(pid_t pid, struct user_regs_struct *regs) {
-  return ptrace(PTRACE_SETREGS, pid, regs);
+  return ptrace(PTRACE_SETREGS, pid, NULL, regs);
 }
 
 // Read a word from tracee memory
 long ptReadMem(pid_t pid, uint64_t addr) {
   errno = 0;
-  long word = ptrace(PTRACE_PEEKDATA, pid, (void *)addr);
+  long word = ptrace(PTRACE_PEEKDATA, pid, (void *)addr, NULL);
   if (errno) {
     perror("ptrace");
     return -1;
