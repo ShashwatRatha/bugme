@@ -5,6 +5,8 @@
 #include <sys/user.h>
 
 #include <cstdint>
+#include <optional>
+#include <string>
 
 enum class Regs {
   rax,
@@ -33,7 +35,8 @@ class Registers {
 
   void getRegs();
   void setRegs(user_regs_struct& regs);
-  uint64_t getRegister(Regs reg) const;
+  const std::optional<Regs> getRegister(const std::string& regName) const;
+  uint64_t getRegisterValue(Regs reg) const;
   void setRegister(const Regs reg, uint64_t value);
   void renderRegs() const;
 

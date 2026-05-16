@@ -18,7 +18,7 @@ class Debugger {
   void getRegs();
   void setBP(uint64_t addr);
   void setBP(const std::string &symName);
-  void setRegister(Regs reg, uint64_t value);
+  void setRegister(const Regs &reg, std::uint64_t value);
 
  private:
   bool mPExited;

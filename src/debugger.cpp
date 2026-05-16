@@ -6,6 +6,7 @@
 #include <csignal>
 #include <cstdint>
 #include <cstdlib>
+#include <exception>
 #include <iostream>
 #include <ostream>
 #include <sstream>
@@ -16,6 +17,18 @@
 #include "brkPoint.hpp"
 #include "ptraceWrappers.h"
 #include "registers.hpp"
+
+#define HELP_TXT                                                        \
+  "cnt                     continue execution\n"                        \
+  "step                    single-step one instruction\n"               \
+  "brk <addr|symbol>       set a breakpoint\n"                          \
+  "mem <addr> <n>          read n bytes from memory\n"                  \
+  "memw <addr> <value>     write a word to memory\n"                    \
+  "regw <reg> <value>      write a value to a register\n"               \
+  "regs                    print all registers\n"                       \
+  "disas [addr|symbol]     disassemble around address or current RIP\n" \
+  "bt                      print backtrace\n"                           \
+  "q                       quit\n"
 
 Debugger::Debugger(const char *program, char *const argv[])
     : mPid(ptSpawn(program, argv)),
@@ -77,13 +90,13 @@ void Debugger::setBP(const std::string &symName) {
   }
 }
 
-void Debugger::setRegister(Regs reg, uint64_t value) {
+void Debugger::setRegister(const Regs &reg, std::uint64_t value) {
   mRegs.setRegister(reg, value);
 }
 
 uint64_t Debugger::getRIP() {
   if (!mPExited) mRegs.getRegs();
-  return mRegs.getRegister(Regs::rip);
+  return mRegs.getRegisterValue(Regs::rip);
 }
 
 void Debugger::setRIP(uint64_t addr) {
@@ -102,6 +115,7 @@ void Debugger::wait() {
   }
 
   if (WIFSTOPPED(status)) {
+    mRegs.getRegs();
     if (WSTOPSIG(status) == SIGTRAP) handleTRAP();
   } else if (WIFSIGNALED(status)) {
     int signal = WTERMSIG(status);
@@ -117,6 +131,11 @@ void Debugger::handleTRAP() {
     std::cout << "Breakpoint hit at 0x" << std::hex << IP << "\n";
     brkPoint->second.disableBP();
     setRIP(IP);
+
+    ptSingleStep(mPid);
+    wait();
+
+    brkPoint->second.enableBP();
   }
 }
 
@@ -138,24 +157,59 @@ void Debugger::handleCommand(std::string &line) {
       std::cout << "usage: brk <address or symbol>\n";
       return;
     }
-
     const std::string &target = tokens[1];
-
     // Check if it looks like a hex address
     if (target.length() > 2 && target[0] == '0' && target[1] == 'x') {
-      uint64_t addr = std::stoull(target, nullptr, 16);
-      setBP(addr);
+      try {
+        uint64_t addr = std::stoull(target, nullptr, 16);
+        setBP(addr);
+      } catch (const std::exception &e) {
+        std::cerr << "invalid argument for brk. use valid address or symbol\n";
+        return;
+      }
     } else {
       // Treat as symbol name
       setBP(target);
     }
   } else if (keyW == "regs") {
+    if (tokens.size() != 1) {
+      std::cerr << "usage: regs\n";
+      return;
+    }
     getRegs();
   } else if (keyW == "q") {
+    if (tokens.size() != 1) {
+      std::cerr << "usage: q\n";
+      return;
+    }
     kill(mPid, SIGTERM);
     exit(0);
   } else if (keyW == "step") {
+    if (tokens.size() != 1) {
+      std::cerr << "usage: step\n";
+      return;
+    }
     ptSingleStep(mPid);
+    wait();
+  } else if (keyW == "regw") {
+    if (tokens.size() != 3) {
+      std::cerr << "usage: regw <regName> <64-bit hex value>\n";
+      return;
+    }
+    auto reg = mRegs.getRegister(tokens[1]);
+    if (!reg.has_value()) {
+      std::cerr << tokens[1] << " is not a valid register name\n";
+      return;
+    }
+    try {
+      auto value = std::stoull(tokens[2], nullptr, 16);
+      setRegister(*reg, static_cast<uint64_t>(value));
+    } catch (const std::exception(&e)) {
+      std::cerr << "The value must be a valid hex string\n";
+      return;
+    }
+  } else if (keyW == "help") {
+    printf(HELP_TXT);
   } else {
     std::cout << "Unknown command " << keyW << "\n";
     return;
