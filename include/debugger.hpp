@@ -21,6 +21,7 @@ class Debugger {
   void setRegister(Regs reg, uint64_t value);
 
  private:
+  bool mPExited;
   pid_t mPid;
   Registers mRegs;
   ElfParser mElf;

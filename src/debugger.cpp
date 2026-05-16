@@ -18,7 +18,11 @@
 #include "registers.hpp"
 
 Debugger::Debugger(const char *program, char *const argv[])
-    : mPid(ptSpawn(program, argv)), mElf(program), mRegs(mPid), mBrkPoints() {}
+    : mPid(ptSpawn(program, argv)),
+      mElf(program),
+      mPExited(false),
+      mRegs(mPid),
+      mBrkPoints() {}
 
 void Debugger::run() {
   std::string line;
@@ -36,7 +40,7 @@ void Debugger::cnt(int signal) {
 }
 
 void Debugger::getRegs() {
-  mRegs.getRegs();
+  if (!mPExited) mRegs.getRegs();
   mRegs.renderRegs();
 }
 
@@ -78,12 +82,12 @@ void Debugger::setRegister(Regs reg, uint64_t value) {
 }
 
 uint64_t Debugger::getRIP() {
-  mRegs.getRegs();
+  if (!mPExited) mRegs.getRegs();
   return mRegs.getRegister(Regs::rip);
 }
 
 void Debugger::setRIP(uint64_t addr) {
-  mRegs.getRegs();
+  if (!mPExited) mRegs.getRegs();
   mRegs.setRegister(Regs::rip, addr);
 }
 
@@ -93,6 +97,7 @@ void Debugger::wait() {
 
   if (WIFEXITED(status)) {
     std::cout << "Tracee exited with code: " << WEXITSTATUS(status) << "\n";
+    mPExited = true;
     return;
   }
 
@@ -101,6 +106,7 @@ void Debugger::wait() {
   } else if (WIFSIGNALED(status)) {
     int signal = WTERMSIG(status);
     std::cout << "Tracee terminated with signal: " << signal << "\n";
+    mPExited = false;
     return;
   }
 }
