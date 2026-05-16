@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <exception>
+#include <ios>
 #include <iostream>
 #include <ostream>
 #include <sstream>
@@ -22,7 +23,7 @@
   "cnt                     continue execution\n"                        \
   "step                    single-step one instruction\n"               \
   "brk <addr|symbol>       set a breakpoint\n"                          \
-  "mem <addr> <n>          read n bytes from memory\n"                  \
+  "memr <addr> <n>          read n bytes from memory\n"                 \
   "memw <addr> <value>     write a word to memory\n"                    \
   "regw <reg> <value>      write a value to a register\n"               \
   "regs                    print all registers\n"                       \
@@ -30,7 +31,7 @@
   "bt                      print backtrace\n"                           \
   "q                       quit\n"
 
-Debugger::Debugger(const char *program, char *const argv[])
+Debugger::Debugger(const char* program, char* const argv[])
     : mPid(ptSpawn(program, argv)),
       mElf(program),
       mPExited(false),
@@ -64,44 +65,8 @@ void Debugger::setBP(uint64_t addr) {
   }
 }
 
-void Debugger::setBP(const std::string &symName) {
-  if (mElf.isPIE()) {
-    auto addr = mElf.getLoadAddress(mPid);
-    if (!addr.has_value()) {
-      std::cerr << "Binary load address unresolved\n";
-      return;
-    }
-    auto offset = mElf.getSymbolOffset(symName);
-    if (!offset.has_value()) {
-      std::cerr << "Symbol " << symName << " is undefined.\n";
-      return;
-    }
-    auto [it, inserted] =
-        mBrkPoints.emplace(*offset + *addr, BreakPoint(mPid, *addr + *offset));
-    if (inserted) it->second.enableBP();
-  } else {
-    auto addr = mElf.getSymbolOffset(symName);
-    if (!addr.has_value()) {
-      std::cerr << "Symbol " << symName << " is undefined.\n";
-      return;
-    }
-    auto [it, inserted] = mBrkPoints.emplace(*addr, BreakPoint(mPid, *addr));
-    if (inserted) it->second.enableBP();
-  }
-}
-
-void Debugger::setRegister(const Regs &reg, std::uint64_t value) {
+void Debugger::setRegister(const Regs& reg, std::uint64_t value) {
   mRegs.setRegister(reg, value);
-}
-
-uint64_t Debugger::getRIP() {
-  if (!mPExited) mRegs.getRegs();
-  return mRegs.getRegisterValue(Regs::rip);
-}
-
-void Debugger::setRIP(uint64_t addr) {
-  if (!mPExited) mRegs.getRegs();
-  mRegs.setRegister(Regs::rip, addr);
 }
 
 void Debugger::wait() {
@@ -120,17 +85,50 @@ void Debugger::wait() {
   } else if (WIFSIGNALED(status)) {
     int signal = WTERMSIG(status);
     std::cout << "Tracee terminated with signal: " << signal << "\n";
-    mPExited = false;
+    mPExited = true;
     return;
   }
 }
 
+void Debugger::memWrite(std::uint64_t addr, std::uint64_t value) {
+  ptWriteMem(mPid, addr, value);
+}
+
+void Debugger::memRead(std::uint64_t addr, std::uint16_t n) {
+  for (auto i = 0; i < n; i += 16) {
+    auto left = n - i;  // number of bytes left to read
+    std::cout << std::hex << addr + i << ": ";
+    std::string rep{};
+    long word = ptReadMem(mPid, addr + i);
+    for (int j = 7; left > 0 && j >= 0;
+         j--) {  // correction for little-endian order
+      uint8_t byte = (word >> (j * 8)) & 0xff;
+      printf("%02x ", byte);
+      rep.push_back(byte > 31 && byte < 127 ? byte : '.');
+      left--;
+    }
+    std::cout << "    ";
+
+    std::cout << std::hex << addr + i + 8 << ": ";
+    word = ptReadMem(mPid, addr + i + 8);
+    for (int j = 7; left > 0 && j >= 0;
+         j--) {  // correction for little-endian order
+      uint8_t byte = (word >> (j * 8)) & 0xff;
+      printf("%02x ", byte);
+      rep.push_back(byte > 31 && byte < 127 ? byte : '.');
+      left--;
+    }
+
+    std::cout << "    " << rep << "\n";
+  }
+}
+
 void Debugger::handleTRAP() {
-  auto IP = getRIP() - 1;
+  auto IP = mRegs.getRegisterValue(Regs::rip) - 1;
   if (auto brkPoint = mBrkPoints.find(IP); brkPoint != mBrkPoints.end()) {
     std::cout << "Breakpoint hit at 0x" << std::hex << IP << "\n";
     brkPoint->second.disableBP();
-    setRIP(IP);
+    mRegs.setRegister(Regs::rip, IP);
 
     ptSingleStep(mPid);
     wait();
@@ -139,7 +137,84 @@ void Debugger::handleTRAP() {
   }
 }
 
-void Debugger::handleCommand(std::string &line) {
+uint64_t Debugger::parseAddr(const std::string& expr) {
+  size_t plusPos = expr.find('+');
+  size_t minusPos = expr.find('-');
+
+  if (plusPos != std::string::npos && minusPos != std::string::npos)
+    throw std::invalid_argument("multiple operators in expression: " + expr);
+
+  size_t opPos = std::string::npos;
+  char op = 0;
+
+  if (plusPos != std::string::npos) {
+    opPos = plusPos;
+    op = '+';
+  } else if (minusPos != std::string::npos) {
+    opPos = minusPos;
+    op = '-';
+  }
+
+  std::string addrPart =
+      (opPos != std::string::npos) ? expr.substr(0, opPos) : expr;
+
+  if (addrPart.empty())
+    throw std::invalid_argument("missing address in expression: " + expr);
+
+  uint64_t base = 0;
+
+  if (addrPart.size() > 2 && addrPart[0] == '0' && addrPart[1] == 'x') {
+    try {
+      base = std::stoull(addrPart, nullptr, 16);
+    } catch (...) {
+      throw std::invalid_argument("invalid hex address: " + addrPart);
+    }
+  } else {
+    if (mElf.isPIE()) {
+      auto loadAddr = mElf.getLoadAddress(mPid);
+      if (!loadAddr.has_value())
+        throw std::runtime_error(
+            "could not resolve load address for PIE binary");
+      auto symOffset = mElf.getSymbolOffset(addrPart);
+      if (!symOffset.has_value())
+        throw std::invalid_argument("unknown symbol: " + addrPart);
+      base = *loadAddr + *symOffset;
+    } else {
+      auto symAddr = mElf.getSymbolOffset(addrPart);
+      if (!symAddr.has_value())
+        throw std::invalid_argument("unknown symbol: " + addrPart);
+      base = *symAddr;
+    }
+  }
+
+  if (opPos != std::string::npos) {
+    std::string offsetPart = expr.substr(opPos + 1);
+
+    if (offsetPart.empty())
+      throw std::invalid_argument("missing offset after '" +
+                                  std::string(1, op) + "'");
+
+    uint64_t offset = 0;
+    try {
+      offset = std::stoull(offsetPart, nullptr, 10);
+    } catch (...) {
+      throw std::invalid_argument("offset must be a decimal number, got: " +
+                                  offsetPart);
+    }
+
+    if (op == '+') {
+      base += offset;
+    } else {
+      if (offset > base)
+        throw std::underflow_error("subtraction would underflow: " + expr);
+      base -= offset;
+    }
+  }
+
+  return base;
+}
+
+void Debugger::handleCommand(std::string& line) {
   std::istringstream cmd(line);
   std::vector<std::string> tokens{};
   std::string token;
@@ -157,19 +232,12 @@ void Debugger::handleCommand(std::string &line) {
       std::cout << "usage: brk <address or symbol>\n";
       return;
     }
-    const std::string &target = tokens[1];
-    // Check if it looks like a hex address
-    if (target.length() > 2 && target[0] == '0' && target[1] == 'x') {
-      try {
-        uint64_t addr = std::stoull(target, nullptr, 16);
-        setBP(addr);
-      } catch (const std::exception &e) {
-        std::cerr << "invalid argument for brk. use valid address or symbol\n";
-        return;
-      }
-    } else {
-      // Treat as symbol name
-      setBP(target);
+    try {
+      auto addr = parseAddr(tokens[1]);
+      setBP(addr);
+    } catch (const std::exception& e) {
+      std::cerr << "brk: " << e.what() << "\n";
+      return;
     }
   } else if (keyW == "regs") {
     if (tokens.size() != 1) {
@@ -207,6 +275,45 @@ void Debugger::handleCommand(std::string &line) {
     } catch (const std::exception(&e)) {
       std::cerr << "The value must be a valid hex string\n";
       return;
+    }
+  } else if (keyW == "memw") {
+    if (tokens.size() != 3) {
+      std::cerr << "usage: memw <addr> <64-bit hex val>";
+      return;
+    }
+    std::uint64_t addr = 0;
+    try {
+      addr = parseAddr(tokens[1]);
+    } catch (const std::exception& e) {
+      std::cerr << e.what() << '\n';
+      return;
+    }
+
+    try {
+      auto val = std::stoull(tokens[2], NULL, 16);
+      memWrite(addr, val);
+    } catch (const std::exception& e) {
+      std::cerr << tokens[2] << " is not a valid hex string\n";
+      return;
+    }
+  } else if (keyW == "memr") {
+    if (tokens.size() != 2 && tokens.size() != 3) {
+      std::cerr << "usage: memr <addr> <number of bytes> (optional)";
+      return;
+    }
+    std::uint64_t addr = 0;
+    try {
+      addr = parseAddr(tokens[1]);
+    } catch (const std::exception& e) {
+      std::cerr << e.what() << '\n';
+      return;
+    }
+
+    try {
+      auto val = std::stoi(tokens[2]);
+      memRead(addr, val);
+    } catch (const std::exception& e) {
+      memRead(addr);
     }
   } else if (keyW == "help") {
     printf(HELP_TXT);

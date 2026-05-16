@@ -3,6 +3,7 @@
 
 #include <sys/types.h>
 
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 
@@ -14,11 +15,6 @@ class Debugger {
  public:
   Debugger(const char *program, char *const argv[]);
   void run();
-  void cnt(int signal);
-  void getRegs();
-  void setBP(uint64_t addr);
-  void setBP(const std::string &symName);
-  void setRegister(const Regs &reg, std::uint64_t value);
 
  private:
   bool mPExited;
@@ -27,11 +23,16 @@ class Debugger {
   ElfParser mElf;
   std::unordered_map<uint64_t, BreakPoint> mBrkPoints;
 
-  void handleTRAP();
+  uint64_t parseAddr(const std::string &addr);
+  void cnt(int signal);
+  void getRegs();
   void handleCommand(std::string &line);
+  void handleTRAP();
+  void memRead(std::uint64_t addr, std::uint16_t n = 64);
+  void memWrite(std::uint64_t addr, std::uint64_t value);
+  void setBP(uint64_t addr);
+  void setRegister(const Regs &reg, std::uint64_t value);
   void wait();
-  uint64_t getRIP();
-  void setRIP(uint64_t addr);
 };
 
 #endif
