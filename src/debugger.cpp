@@ -5,10 +5,13 @@
 
 #include <csignal>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <exception>
+#include <fstream>
 #include <ios>
 #include <iostream>
+#include <optional>
 #include <ostream>
 #include <sstream>
 #include <string>
@@ -90,14 +93,64 @@ void Debugger::wait() {
   }
 }
 
+std::optional<Debugger::MemRegion> Debugger::getRegion(const uint64_t& addr) {
+  auto procPath = "/proc/" + std::to_string(mPid) + "/maps";
+  std::ifstream procFile(procPath);
+  std::string line;
+
+  while (std::getline(procFile, line)) {
+    std::string addrSpace, perms;
+    std::istringstream strStream(line);
+
+    strStream >> addrSpace >> perms;
+    uint64_t start, end;
+    sscanf(addrSpace.c_str(), "%lx-%lx", &start, &end);
+    if (start <= addr && addr <= end) {
+      return MemRegion(
+          {start, end, perms[0] == 'r', perms[1] == 'w', perms[2] == 'x'});
+    }
+  }
+
+  return std::nullopt;
+}
+
 void Debugger::memWrite(std::uint64_t addr, std::uint64_t value) {
+  auto region = getRegion(addr);
+  if (!region.has_value()) {
+    std::cerr << "0x" << std::hex << addr << " is not mapped into memory\n";
+    return;
+  }
+  if (!region->w) {
+    std::cerr << "0x" << std::hex << addr << " is not writeable\n";
+    return;
+  }
+  if (addr + 7 > region->endAddr) {
+    std::cerr << "can not write a 64-bit word to 0x" << std::hex << addr
+              << "\n";
+    return;
+  }
   ptWriteMem(mPid, addr, value);
 }
 
 void Debugger::memRead(std::uint64_t addr, std::uint16_t n) {
+  auto region = getRegion(addr);
+  if (!region.has_value()) {
+    std::cerr << "0x" << std::hex << addr << " is not mapped into memory\n";
+    return;
+  }
+  if (!region->r) {
+    std::cerr << "0x" << std::hex << addr << " is not readable\n";
+    return;
+  }
+  if (addr + n > region->endAddr) {
+    std::cerr << n << " bytes from 0x" << std::hex << addr
+              << " is not readable\n";
+    std::cout << "only " << (n = region->endAddr - addr)
+              << " bytes can be read\n";
+  }
   for (auto i = 0; i < n; i += 16) {
     auto left = n - i;  // number of bytes left to read
-    std::cout << std::hex << addr + i << ": ";
+    std::cout << "0x" << std::hex << addr + i << ": ";
     std::string rep{};
     long word = ptReadMem(mPid, addr + i);
     for (int j = 7; left > 0 && j >= 0;
@@ -109,7 +162,6 @@ void Debugger::memRead(std::uint64_t addr, std::uint16_t n) {
     }
     std::cout << "    ";
 
-    std::cout << std::hex << addr + i + 8 << ": ";
     word = ptReadMem(mPid, addr + i + 8);
     for (int j = 7; left > 0 && j >= 0;
          j--) {  // correction for little-endian order
@@ -119,7 +171,10 @@ void Debugger::memRead(std::uint64_t addr, std::uint16_t n) {
       left--;
     }
 
-    std::cout << "    " << rep << "\n";
+    auto written = n - i - left;
+    auto charsWritten = written * 3 + (written > 8 ? 4 : 0);
+    for (int j = 0; j < 56 - charsWritten; j++) std::cout << " ";
+    std::cout << rep << "\n";
   }
 }
 
@@ -278,7 +333,7 @@ void Debugger::handleCommand(std::string& line) {
     }
   } else if (keyW == "memw") {
     if (tokens.size() != 3) {
-      std::cerr << "usage: memw <addr> <64-bit hex val>";
+      std::cerr << "usage: memw <addr> <64-bit hex val>\n";
       return;
     }
     std::uint64_t addr = 0;
@@ -298,7 +353,7 @@ void Debugger::handleCommand(std::string& line) {
     }
   } else if (keyW == "memr") {
     if (tokens.size() != 2 && tokens.size() != 3) {
-      std::cerr << "usage: memr <addr> <number of bytes> (optional)";
+      std::cerr << "usage: memr <addr> <number of bytes> (optional)\n";
       return;
     }
     std::uint64_t addr = 0;
@@ -308,13 +363,16 @@ void Debugger::handleCommand(std::string& line) {
       std::cerr << e.what() << '\n';
       return;
     }
-
-    try {
-      auto val = std::stoi(tokens[2]);
-      memRead(addr, val);
-    } catch (const std::exception& e) {
+    if (tokens.size() == 3) {
+      try {
+        auto val = std::stoi(tokens[2]);
+        memRead(addr, val);
+      } catch (const std::exception& e) {
+        std::cerr << "invalid byte count " << tokens[2] << "\n";
+        return;
+      }
+    } else
       memRead(addr);
-    }
   } else if (keyW == "help") {
     printf(HELP_TXT);
   } else {

@@ -1,108 +1,184 @@
 # BugMe
 
-A Linux debugger built from scratch in C and C++, using `ptrace`. Supports setting breakpoints, inspecting registers, and stepping through execution of any ELF binary.
+A minimal Linux userspace debugger built from scratch using `ptrace`, written in C and C++.
 
-Built as a learning project to understand how debuggers like gdb and lldb actually work under the hood.
+The project is designed to expose how debuggers like `gdb` actually work at a low level — including software breakpoints, register inspection, memory access, and symbol resolution via ELF parsing.
 
-## How it works
+## Core Concepts
 
-The core mechanism is the Linux `ptrace` syscall, which lets one process (the debugger) observe and control another (the tracee). A breakpoint is just one byte — `0xcc` (`int 3`) — written into the tracee's code at the target address. When the CPU executes it, a `SIGTRAP` is raised, the process pauses, and the debugger wakes up. It then restores the original byte, rewinds the instruction pointer by one, and hands control back to the user.
+### Ptrace
 
-Register reads and writes go through `PTRACE_GETREGS` / `PTRACE_SETREGS`, which snapshot the full CPU register state of the tracee at any point before it exits. The register state is cached upon each call to _ptGetRegs()_, which is used to show the last updated register values after the tracee exits.
+The debugger relies on the Linux `ptrace` system call as its fundamental mechanism to observe and control the target process:
+
+* **Process Lifecycles:** Spawns and tracks a child process via `PTRACE_TRACEME`.
+* **Execution Control:** Manipulates runtime states using `PTRACE_CONT` and `PTRACE_SINGLESTEP`.
+* **Register Modification:** Inspects and overwrites CPU architectures via `PTRACE_GETREGS` and `PTRACE_SETREGS`.
+* **Memory Access:** Directly manipulates target memory spaces via `PTRACE_PEEKDATA` and `PTRACE_POKEDATA`.
+
+### Breakpoints
+
+Software breakpoints are achieved by physically rewriting tracee process instructions at runtime:
+
+1. The debugger reads the target instruction at a specified address.
+2. It replaces the first byte of that instruction with `0xCC` (`int 3`).
+3. When the CPU hits the trap, execution pauses and a `SIGTRAP` signal wakes up the debugger.
+4. **On Trap:** The debugger restores the original code byte, rewinds the Instruction Pointer (`RIP`) by 1 byte, steps over the original instruction, and then reinserts the `0xCC` breakpoint to keep it armed.
+
+This state machine is fully encapsulated within the `BreakPoint` class.
+
+### Register Model
+
+* **Caching:** Register states are cached locally inside the debugger layer after every process stop event.
+* **Granular Access:** Targeted fields are parsed via accurate byte offsets into the Linux `user_regs_struct`.
+* **Decoupling:** Read and write triggers are clean wrappers isolating systemic side-effects, managed inside the `Registers` class.
+
+### ELF & Symbol Resolution
+
+* Parses the binary's ELF Symbol Table to resolve human-readable symbol strings to physical memory addresses.
+* Features Position-Independent Executable (PIE) aware address translations.
+* Extracts the live process load-base dynamically by reading `/proc/<pid>/maps`.
+
+This component is managed entirely by the `ElfParser` class.
+
+---
 
 ## Architecture
 
-The project is written in both C and C++:
-
-- **C** (`ptraceWrappers.c`) — thin wrappers around raw `ptrace` syscalls, `fork`, `execvp`, `waitpid`
-- **C++** (`Debugger`, `BreakPoint`, `Registers`, `ElfParser` classes) — owns all state and logic, calls into the C layer
+The project maintains a strict boundary between low-level system execution wrappers written in C and high-level structural orchestration classes written in modern C++:
 
 ```
 main.cpp
-  └── Debugger          owns everything, runs the command loop
-        ├── Registers   fetches/writes CPU registers via ptrace
-        ├── BreakPoint  plants/restores int3 at a given address
-        └── ElfParser   finds loading address of the elf and finds symbols in it
+  └── Debugger          Central orchestrator; executes the user CLI loop and handles OS signals
+        ├── BreakPoint  Manages software breakpoint insertion, modification, and restoration states
+        ├── Registers   Abstracts CPU registers, mapping string identifiers to architectural registers
+        ├── ElfParser   Parses ELF data headers, resolving symbols to memory locations (PIE-aware)
+        └── ptraceWrappers (C) Thin procedural wrappers isolating direct Linux syscall interfaces
+
 ```
+
+---
 
 ## Building
 
+### Requirements
+
+* **CMake** >= 3.10
+* **GCC / G++** compilers supporting C11 and C++17 standards
+* **libelf** runtime development library (used for symbol parsing)
+
+The build engine utilizes `pkg-config` to locate, verify, and dynamically link against your environment's system `libelf` binaries.
+
+### Compilation
+
 ```bash
-scripts/build
+mkdir build && cd build
+cmake ..
+make
+
 ```
 
-Requires libelf, CMake 3.10+, GCC/G++ with C11 and C++17 support.
+The compiled output is generated at `bin/bugme`.
+
+---
 
 ## Usage
 
-Compile your target with debug symbols and -O0 enabled:
+Compile your target program with debugging symbols explicitly included and optimizations disabled (`-O0`):
 
 ```bash
 gcc -g -O0 -o target target.c
+
 ```
 
-Run the debugger:
+Launch your application inside the debugger:
 
 ```bash
 ./bin/bugme ./target
+
 ```
 
-Find function addresses with objdump:
-
-### Commands
+### Command Reference
 
 | Command | Description |
-|--------|-------------|
-| `brk <addr or symbol>` | Set a breakpoint at hex address (e.g. `brk 0x401189`) or at a symbol (e.g. `brk main`) |
+| --- | --- |
 | `cnt` | Continue execution |
-| `regs` | Print all CPU registers |
-| `step` | Step through single instruction |
-| `q` | Kill the tracee and quit |
+| `step` | Execute a single machine instruction |
+| `brk <addr / symbol>` | Set a software breakpoint at a hex address, a symbol name, or an offset |
+| `regs` | Print snapshot values of all active CPU registers |
+| `regw <reg> <value>` | Write an explicit hexadecimal value into a target register |
+| `memr <addr> [n]` | Read `n` bytes of memory starting at a specified address |
+| `memw <addr> <value>` | Write a value into a specific target memory address |
+| `help` | Display the command help matrix |
+| `q` | Terminate the tracee process and exit the debugger |
 
-### Example session
+### Address Expressions
 
-```
-$ bin/bugme bin/tests/testdbg
-bugme> brk factorial
-bugme> cnt
-starting
-add(3, 4) = 7
-Breakpoint hit at 0x56fc1ca651a1
-bugme> regs
-rip    0x00000056fc1ca651a1
-rax    0x00000000000000000e    rbx    0x0000007ffee72bb728    rcx    0x000000000000000000    rdx    0x000000000000000000    
-rdi    0x000000000000000005    rsi    0x00000056fc4b93f2a0    rsp    0x0000007ffee72bb5c8    rbp    0x0000007ffee72bb600    
-r8     0x000000000000000064    r9     0x000000000000000000    r10    0x000000000000000000    r11    0x000000000000000202    
-r12    0x000000000000000001    r13    0x000000000000000000    r14    0x00000056fc1ca67db0    r15    0x00000072feb4d24000    
-bugme> step
-bugme> regs
-rip    0x00000056fc1ca651a5
-rax    0x00000000000000000e    rbx    0x0000007ffee72bb728    rcx    0x000000000000000000    rdx    0x000000000000000000    
-rdi    0x000000000000000005    rsi    0x00000056fc4b93f2a0    rsp    0x0000007ffee72bb5c8    rbp    0x0000007ffee72bb600    
-r8     0x000000000000000064    r9     0x000000000000000000    r10    0x000000000000000000    r11    0x000000000000000202    
-r12    0x000000000000000001    r13    0x000000000000000000    r14    0x00000056fc1ca67db0    r15    0x00000072feb4d24000    
-bugme> cnt
-factorial(5) = 120
-sum = 150
-done
-Tracee exited with code: 0
-bugme> q 
+The interpreter resolves expressions using `Debugger::parseAddr` to correctly map layout dependencies under PIE environments:
+
+* **Raw Hex Endpoints:** `brk 0x401000`
+* **Symbol Strings:** `brk main`
+* **Offset Math:** `brk main+16` or `brk 0x401000-8`
+
+### Memory Validation Model
+
+All memory access actions are checked against `/proc/<pid>/maps` records before executing actual reads or writes. This layer:
+
+* Confirms target regions exist inside mapped spaces.
+* Validates explicit permission masks (Read/Write attributes).
+* Eliminates out-of-bounds `ptrace` system faults or sudden debugger runtime panics.
+
+---
+
+## Execution Flow
 
 ```
+[ptSpawn()] Fork & setup tracee via PTRACE_TRACEME
+   │
+   ▼
+[Debugger] Blocks & traps initial tracee initialization signal
+   │
+   ▼
+[CLI Loop] Awaits user command input (e.g., set breakpoint, continue)
+   │
+   ▼
+[SIGTRAP] Intercepted breakpoint trigger:
+   ├── Detect target breakpoint mapping matches
+   ├── Rewind CPU Instruction Pointer (RIP)
+   ├── Step past original instruction safely
+   └── Re-arm breakpoint with 0xCC trap
 
-## What I learned
+```
 
-- How `ptrace` works and what it actually exposes — registers, memory, signals, syscalls
-- How breakpoints are implemented at the hardware level (`int 3` / `0xcc`)
-- Why the instruction pointer is off by one when a breakpoint fires, and how to rewind it
-- C++ OOP in a real context — classes, constructors, `enum class`, `std::unordered_map`, `std::optional`, RAII
-- How to mix C and C++ in the same project using `extern "C"`
-- What ASLR is and why `-no-pie` matters when setting breakpoints by address
-- What the `W*` macros (`WIFEXITED`, `WIFSTOPPED`, `WSTOPSIG` etc.) actually unpack from `waitpid`'s status integer
+---
 
-## Planned
+## Limitations & Future Work
 
-- Memory inspection (`mem <addr>`)
-- Re-enabling breakpoints after stepping over them
-- DWARF debug info parsing — set breakpoints by function name instead of raw address
-- A TUI with a register panel, code view, and command palette
+### Limitations
+
+* **Disassembler:** Context command frameworks exist but structural outputs are unimplemented.
+* **Stack Maps:** Backtrace call stack unwinding tracking is missing.
+* **DWARF:** Source-level debugging using raw lines or file scopes is not yet integrated.
+* **Concurrency:** Limited to single-threaded runtime targets.
+* **Interface:** Restricted strictly to standard CLI processing.
+
+### Planned Features
+
+* **DWARF Integration:** Native source-level stepping and expression lookups.
+* **Disassembly Engine:** In-line machine instruction printouts alongside execution pointers.
+* **Stack Unwinding:** Stack tracking maps to cleanly recreate complete backtraces.
+* **Conditional Actions:** Evaluate expression logic parameters on breakpoint hits.
+* **Hardware Tracing:** Use debug registers to configure hardware breakpoints and watchpoints.
+* **TUI Framework:** Terminal visual dashboard presenting register tables and live code states simultaneously.
+
+---
+
+## Learning Value
+
+Developing this engine provided hands-on experience with:
+
+* Practical applications, boundaries, and low-level mechanics of the Linux `ptrace` API.
+* Real-world software breakpoint traps, hardware behaviors, and pipeline correction techniques.
+* ELF layout parsing, symbol string tables, and translation schemes.
+* Inspecting virtual memory layout attributes via the `/proc` subsystem.
+* Low-level CPU manipulation across active registers.
+* Separating raw procedural system layers from maintainable, modern object-oriented codebases.
