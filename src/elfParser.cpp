@@ -7,17 +7,21 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <optional>
 #include <sstream>
 #include <string>
+#include <utility>
 
 ElfParser::ElfParser(const std::string& executablePath)
     : mPath(executablePath),
       mSymbolTable(),
+      mAddrMap(),
       mIsPIE(false),
       mElfHandle(nullptr),
       mFD(-1) {
@@ -85,6 +89,30 @@ bool ElfParser::loadElf() {
   return true;
 }
 
+std::optional<std::string> ElfParser::getSymbolName(const std::uint64_t& addr) {
+  if (mAddrMap.empty()) loadSymbols();
+  auto upAddr = mAddrMap.upper_bound(addr);
+  if (upAddr == mAddrMap.begin()) return std::nullopt;
+  upAddr--;
+
+  auto [keyAddr, symbol] = *upAddr;
+
+  if (symbol.second > 0 && addr > keyAddr + symbol.second) return std::nullopt;
+  return symbol.first;
+}
+
+std::optional<std::size_t> ElfParser::getSymbolSize(const std::uint64_t& addr) {
+  if (mAddrMap.empty()) loadSymbols();
+  auto upAddr = mAddrMap.upper_bound(addr);
+  if (upAddr == mAddrMap.begin()) return std::nullopt;
+  upAddr--;
+
+  auto [keyAddr, symbol] = *upAddr;
+
+  if (symbol.second > 0 && addr > keyAddr + symbol.second) return std::nullopt;
+  return symbol.second;
+}
+
 void ElfParser::loadSymbols() {
   if (!mElfHandle)
     if (!loadElf()) return;
@@ -96,7 +124,7 @@ void ElfParser::loadSymbols() {
     gelf_getshdr(section, &sectionHdr);
 
     // static symbol table
-    if (sectionHdr.sh_type == SHT_SYMTAB) {
+    if (sectionHdr.sh_type == SHT_SYMTAB || sectionHdr.sh_type == SHT_DYNSYM) {
       Elf_Data* data = elf_getdata(section, NULL);
       uint32_t num = sectionHdr.sh_size / sectionHdr.sh_entsize;
 
@@ -109,6 +137,12 @@ void ElfParser::loadSymbols() {
         std::string name =
             elf_strptr(mElfHandle, sectionHdr.sh_link, symEntry.st_name) ?: "";
         if (!name.empty()) mSymbolTable.emplace(name, symEntry.st_value);
+
+        if (GELF_ST_TYPE(symEntry.st_info) == STT_FUNC) {
+          mAddrMap.emplace(
+              static_cast<uint64_t>(symEntry.st_value),
+              std::make_pair(name, static_cast<uint64_t>(symEntry.st_size)));
+        }
       }
     }
   }

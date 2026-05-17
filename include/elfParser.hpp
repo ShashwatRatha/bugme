@@ -4,7 +4,9 @@
 #include <gelf.h>
 #include <sys/types.h>
 
+#include <cstddef>
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -40,6 +42,8 @@ class ElfParser {
    * @brief Checks if the binary is a Position Independent Executable (PIE).
    */
   bool isPIE() const;
+  std::optional<std::string> getSymbolName(const std::uint64_t& addr);
+  std::optional<std::size_t> getSymbolSize(const std::uint64_t& addr);
 
  private:
   std::string mPath;
@@ -47,6 +51,7 @@ class ElfParser {
   int mFD = -1;
   bool mIsPIE = false;
   std::unordered_map<std::string, uint64_t> mSymbolTable;
+  std::map<std::uint64_t, std::pair<std::string, std::size_t>> mAddrMap;
 
   bool loadElf();
   void loadSymbols();
