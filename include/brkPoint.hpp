@@ -1,5 +1,5 @@
-#ifndef BRKPOINT_H_
-#define BRKPOINT_H_
+#ifndef BRKPOINT_HPP_
+#define BRKPOINT_HPP_
 
 #include <sys/types.h>
 

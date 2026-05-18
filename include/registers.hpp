@@ -1,5 +1,5 @@
-#ifndef REGISTERS_H_
-#define REGISTERS_H_
+#ifndef REGISTERS_HPP_
+#define REGISTERS_HPP_
 
 #include <sys/types.h>
 #include <sys/user.h>

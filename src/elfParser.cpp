@@ -89,6 +89,38 @@ bool ElfParser::loadElf() {
   return true;
 }
 
+std::optional<ElfParser::TextSection> ElfParser::loadTextSection() {
+  if (!mElfHandle)
+    if (!loadElf()) return std::nullopt;
+
+  size_t scnNameStrIdx;
+  if (elf_getshdrstrndx(mElfHandle, &scnNameStrIdx) != 0) return std::nullopt;
+
+  Elf_Scn* section = NULL;
+  GElf_Shdr sectionHdr;
+
+  while ((section = elf_nextscn(mElfHandle, section)) != NULL) {
+    gelf_getshdr(section, &sectionHdr);
+
+    if (auto secName =
+            elf_strptr(mElfHandle, scnNameStrIdx, sectionHdr.sh_name);
+        secName && std::string(secName) == ".text") {
+      Elf_Data* codeSeg = elf_getdata(section, NULL);
+      if (!codeSeg || !codeSeg->d_buf) return std::nullopt;
+
+      TextSection tSec;
+      tSec.startAddr = sectionHdr.sh_addr;
+      tSec.bytes =
+          std::vector(static_cast<uint8_t*>(codeSeg->d_buf),
+                      static_cast<uint8_t*>(codeSeg->d_buf) + codeSeg->d_size);
+
+      return tSec;
+    }
+  }
+
+  return std::nullopt;
+}
+
 std::optional<std::string> ElfParser::getSymbolName(const std::uint64_t& addr) {
   if (mAddrMap.empty()) loadSymbols();
   auto upAddr = mAddrMap.upper_bound(addr);

@@ -1,5 +1,5 @@
-#ifndef DEBUG_H_
-#define DEBUG_H_
+#ifndef DEBUG_HPP_
+#define DEBUG_HPP_
 
 #include <sys/types.h>
 
@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "brkPoint.hpp"
+#include "disassembler.hpp"
 #include "elfParser.hpp"
 #include "registers.hpp"
 
@@ -27,6 +28,9 @@ class Debugger {
   std::unordered_map<std::string,
                      std::function<void(const std::vector<std::string> &)>>
       mCommands;
+  Disassembler mDisas;
+  std::vector<Disassembler::Instruction> mDisasInstructions;
+  std::unordered_map<std::uint64_t, int> mAddrInsn;
   struct MemRegion {
     std::uint64_t startAddr;
     std::uint64_t endAddr;
@@ -46,6 +50,8 @@ class Debugger {
   void wait();
   void backTrace();
   void loadCommands();
+  void loadDisassembly();
+  void renderDisassembly(const uint64_t &addr, const size_t &num = 16);
 };
 
 #endif

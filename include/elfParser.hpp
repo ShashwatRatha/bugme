@@ -10,6 +10,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 /**
  * @brief Simple wrapper around libelf to handle symbol resolution
@@ -41,9 +42,14 @@ class ElfParser {
   /**
    * @brief Checks if the binary is a Position Independent Executable (PIE).
    */
+  struct TextSection {
+    uint64_t startAddr;
+    std::vector<uint8_t> bytes;
+  };
   bool isPIE() const;
   std::optional<std::string> getSymbolName(const std::uint64_t& addr);
   std::optional<std::size_t> getSymbolSize(const std::uint64_t& addr);
+  std::optional<TextSection> loadTextSection();
 
  private:
   std::string mPath;

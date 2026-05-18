@@ -10,9 +10,10 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
 
 find_package(PkgConfig)
 pkg_check_modules(LIBELF REQUIRED libelf)
+pkg_check_modules(CAPSTONE REQUIRED capstone)
 
 file(GLOB SOURCES "src/*.c" "src/*.cpp")
 add_executable(bugme ${SOURCES})
 
-target_include_directories(bugme PRIVATE include ${LIBELF_INCLUDE_DIRS})
-target_link_libraries(bugme PRIVATE ${LIBELF_LIBRARIES})
+target_include_directories(bugme PRIVATE include ${LIBELF_INCLUDE_DIRS} ${CAPSTONE_INCLUDE_DIRS})
+target_link_libraries(bugme PRIVATE ${LIBELF_LIBRARIES} ${CAPSTONE_LIBRARIES})
