@@ -260,175 +260,185 @@ void Debugger::handleTRAP() {
 }
 
 void Debugger::loadCommands() {
-  mCommands = {{"q",
-                [&](CommandArg tokens) {
-                  if (tokens.size() != 1) {
-                    std::cerr << "usage: q\n";
-                    return;
-                  }
-                  if (!mPExited) {
-                    std::cout
-                        << "### The process (PID: " << mPid
-                        << ") is running. Do you want to close the debugger?\n"
-                           "(type y/Y to exit) ";
-                    std::string response;
-                    std::getline(std::cin, response);
-                    if (response.back() == '\n') response.pop_back();
-                    if (response != "Y" && response != "y") return;
-                  }
-                  kill(mPid, SIGTERM);
-                  exit(0);
-                }},
-               {"brk",
-                [&](CommandArg tokens) {
-                  if (tokens.size() != 2) {
-                    std::cout << "usage: brk <address or symbol>\n";
-                    return;
-                  }
-                  try {
-                    auto addr = parseAddr(tokens[1]);
-                    setBP(addr);
-                  } catch (const std::exception& e) {
-                    std::cerr << "brk: " << e.what() << "\n";
-                    return;
-                  }
-                }},
-               {"cnt", [&](CommandArg tokens) { cnt(); }},
-               {"regs",
-                [&](CommandArg tokens) {
-                  if (tokens.size() != 1) {
-                    std::cerr << "usage: regs\n";
-                    return;
-                  }
-                  getRegs();
-                }},
-               {"regw",
-                [&](CommandArg tokens) {
-                  if (tokens.size() != 3) {
-                    std::cerr << "usage: regw <regName> <64-bit hex value>\n";
-                    return;
-                  }
-                  auto reg = mRegs.getRegister(tokens[1]);
-                  if (!reg.has_value()) {
-                    std::cerr << tokens[1] << " is not a valid register name\n";
-                    return;
-                  }
-                  try {
-                    auto value = std::stoull(tokens[2], nullptr, 16);
-                    setRegister(*reg, static_cast<uint64_t>(value));
-                  } catch (const std::exception(&e)) {
-                    std::cerr << "The value must be a valid hex string\n";
-                    return;
-                  }
-                }},
-               {"memr",
-                [&](CommandArg tokens) {
-                  if (tokens.size() != 2 && tokens.size() != 3) {
-                    std::cerr << "usage: memr <addr> [n]\n";
-                    return;
-                  }
-                  std::uint64_t addr = 0;
-                  try {
-                    addr = parseAddr(tokens[1]);
-                  } catch (const std::exception& e) {
-                    std::cerr << e.what() << '\n';
-                    return;
-                  }
-                  if (tokens.size() == 3) {
-                    try {
-                      auto val = std::stoi(tokens[2]);
-                      memRead(addr, val);
-                    } catch (const std::exception& e) {
-                      std::cerr << "invalid byte count " << tokens[2] << "\n";
-                      return;
-                    }
-                  } else {
-                    memRead(addr);
-                  }
-                }},
-               {"memw",
-                [&](CommandArg tokens) {
-                  if (tokens.size() != 3) {
-                    std::cerr << "usage: memw <addr> <64-bit hex val>\n";
-                    return;
-                  }
-                  std::uint64_t addr = 0;
-                  try {
-                    addr = parseAddr(tokens[1]);
-                  } catch (const std::exception& e) {
-                    std::cerr << e.what() << '\n';
-                    return;
-                  }
+  mCommands = {
+      {"q",
+       [&](CommandArg tokens) {
+         if (tokens.size() != 1) {
+           std::cerr << "usage: q\n";
+           return;
+         }
+         if (!mPExited) {
+           std::cout << "### The process (PID: " << mPid
+                     << ") is running. Do you want to close the debugger?\n"
+                        "(type y/Y to exit) ";
+           std::string response;
+           std::getline(std::cin, response);
+           if (response.back() == '\n') response.pop_back();
+           if (response != "Y" && response != "y") return;
+         }
+         kill(mPid, SIGTERM);
+         exit(0);
+       }},
+      {"brk",
+       [&](CommandArg tokens) {
+         if (tokens.size() != 2) {
+           std::cout << "usage: brk <address or symbol>\n";
+           return;
+         }
+         try {
+           auto addr = parseAddr(tokens[1]);
+           setBP(addr);
+         } catch (const std::exception& e) {
+           std::cerr << "brk: " << e.what() << "\n";
+           return;
+         }
+       }},
+      {"cnt", [&](CommandArg tokens) { cnt(); }},
+      {"regs",
+       [&](CommandArg tokens) {
+         if (tokens.size() != 1) {
+           std::cerr << "usage: regs\n";
+           return;
+         }
+         getRegs();
+       }},
+      {"regw",
+       [&](CommandArg tokens) {
+         if (tokens.size() != 3) {
+           std::cerr << "usage: regw <regName> <64-bit hex value>\n";
+           return;
+         }
+         auto reg = mRegs.getRegister(tokens[1]);
+         if (!reg.has_value()) {
+           std::cerr << tokens[1] << " is not a valid register name\n";
+           return;
+         }
+         try {
+           auto value = std::stoull(tokens[2], nullptr, 16);
+           setRegister(*reg, static_cast<uint64_t>(value));
+         } catch (const std::exception(&e)) {
+           std::cerr << "The value must be a valid hex string\n";
+           return;
+         }
+       }},
+      {"memr",
+       [&](CommandArg tokens) {
+         if (tokens.size() != 2 && tokens.size() != 3) {
+           std::cerr << "usage: memr <addr> [n]\n";
+           return;
+         }
+         std::uint64_t addr = 0;
+         try {
+           addr = parseAddr(tokens[1]);
+         } catch (const std::exception& e) {
+           std::cerr << e.what() << '\n';
+           return;
+         }
+         if (tokens.size() == 3) {
+           try {
+             auto val = std::stoi(tokens[2]);
+             memRead(addr, val);
+           } catch (const std::exception& e) {
+             std::cerr << "invalid byte count " << tokens[2] << "\n";
+             return;
+           }
+         } else {
+           memRead(addr);
+         }
+       }},
+      {"memw",
+       [&](CommandArg tokens) {
+         if (tokens.size() != 3) {
+           std::cerr << "usage: memw <addr> <64-bit hex val>\n";
+           return;
+         }
+         std::uint64_t addr = 0;
+         try {
+           addr = parseAddr(tokens[1]);
+         } catch (const std::exception& e) {
+           std::cerr << e.what() << '\n';
+           return;
+         }
 
-                  try {
-                    auto val = std::stoull(tokens[2], NULL, 16);
-                    memWrite(addr, val);
-                  } catch (const std::exception& e) {
-                    std::cerr << tokens[2] << " is not a valid hex string\n";
-                    return;
-                  }
-                }},
-               {"bt",
-                [&](CommandArg tokens) {
-                  if (tokens.size() != 1) {
-                    std::cerr << "usage: bt\n";
-                    return;
-                  }
-                  backTrace();
-                }},
-               {"step",
-                [&](CommandArg tokens) {
-                  if (tokens.size() != 1) {
-                    std::cerr << "usage: step\n";
-                    return;
-                  }
-                  ptSingleStep(mPid);
-                  wait();
-                }},
-               {"help", [&](CommandArg tokens) { printf(HELP_TXT); }},
-               {"disas", [&](CommandArg tokens) {
-                  if (tokens.size() != 2 && tokens.size() != 3) {
-                    std::cerr << "usage: disas <hex addr|symbol> [n]\n";
-                    return;
-                  }
-                  uint64_t addr = 0;
-                  try {
-                    addr = parseAddr(tokens[1]);
-                  } catch (const std::exception& e) {
-                    std::cerr << e.what() << "\n";
-                    return;
-                  }
-                  if (tokens.size() == 3) {
-                    try {
-                      auto num = std::stoul(tokens[2]);
-                      renderDisassembly(addr, num);
-                    } catch (const std::exception& e) {
-                      std::cerr << e.what() << "\n";
-                      return;
-                    }
-                  } else {
-                    auto name = mElf.getSymbolName(addr);
-                    if (name.has_value()) {
-                      uint64_t lookupAddr = addr;
-                      if (mElf.isPIE()) {
-                        auto loadAddr = mElf.getLoadAddress(mPid);
-                        if (!loadAddr.has_value()) {
-                          std::cerr << "couldnt resolve load address\n";
-                          return;
-                        }
-                        if (*loadAddr < lookupAddr) lookupAddr -= *loadAddr;
-                      }
-                      auto offset = addr - lookupAddr;
-                      auto idx = mAddrInsn.find(lookupAddr)->second, i = idx;
-                      while (i < mDisasInstructions.size() &&
-                             mDisasInstructions[i++].instruction != "ret");
-                      std::cout << *name << ":\n";
-                      renderDisassembly(addr, i - 1 - idx);
-                    } else {
-                      renderDisassembly(addr);
-                    }
-                  }
-                }}};
+         try {
+           auto val = std::stoull(tokens[2], NULL, 16);
+           memWrite(addr, val);
+         } catch (const std::exception& e) {
+           std::cerr << tokens[2] << " is not a valid hex string\n";
+           return;
+         }
+       }},
+      {"bt",
+       [&](CommandArg tokens) {
+         if (tokens.size() != 1) {
+           std::cerr << "usage: bt\n";
+           return;
+         }
+         backTrace();
+       }},
+      {"step",
+       [&](CommandArg tokens) {
+         if (tokens.size() != 1) {
+           std::cerr << "usage: step\n";
+           return;
+         }
+         ptSingleStep(mPid);
+         wait();
+       }},
+      {"help", [&](CommandArg tokens) { printf(HELP_TXT); }},
+      {"disas", [&](CommandArg tokens) {
+         if (tokens.size() != 2 && tokens.size() != 3) {
+           std::cerr << "usage: disas <hex addr|symbol> [n]\n";
+           return;
+         }
+         uint64_t addr = 0;
+         try {
+           addr = parseAddr(tokens[1]);
+         } catch (const std::exception& e) {
+           std::cerr << e.what() << "\n";
+           return;
+         }
+         auto region = getRegion(addr);
+         if (!region.has_value()) {
+           std::cerr << "0x" << std::hex << addr
+                     << " is not mapped into memory\n";
+           return;
+         }
+         if (!region->r) {
+           std::cerr << "0x" << std::hex << addr << " is not readable\n";
+           return;
+         }
+         if (tokens.size() == 3) {
+           try {
+             auto num = std::stoul(tokens[2]);
+             renderDisassembly(addr, num);
+           } catch (const std::exception& e) {
+             std::cerr << e.what() << "\n";
+             return;
+           }
+         } else {
+           auto name = mElf.getSymbolName(addr);
+           if (name.has_value()) {
+             uint64_t lookupAddr = addr;
+             if (mElf.isPIE()) {
+               auto loadAddr = mElf.getLoadAddress(mPid);
+               if (!loadAddr.has_value()) {
+                 std::cerr << "couldnt resolve load address\n";
+                 return;
+               }
+               if (*loadAddr < lookupAddr) lookupAddr -= *loadAddr;
+             }
+             auto offset = addr - lookupAddr;
+             auto idx = mAddrInsn.find(lookupAddr)->second, i = idx;
+             while (i < mDisasInstructions.size() &&
+                    mDisasInstructions[i++].instruction != "ret");
+             std::cout << *name << ":\n";
+             renderDisassembly(addr, i - 1 - idx);
+           } else {
+             renderDisassembly(addr);
+           }
+         }
+       }}};
 }
 
 void Debugger::backTrace() {
