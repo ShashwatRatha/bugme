@@ -12,8 +12,25 @@ find_package(PkgConfig)
 pkg_check_modules(LIBELF REQUIRED libelf)
 pkg_check_modules(CAPSTONE REQUIRED capstone)
 
-file(GLOB SOURCES "src/cli/*.c" "src/cli/*.cpp")
-add_executable(bugme-cli ${SOURCES})
+file(
+  GLOB SOURCES
+  "src/cli/*.c"
+  "src/cli/*.cpp"
+)
 
-target_include_directories(bugme-cli PRIVATE include ${LIBELF_INCLUDE_DIRS} ${CAPSTONE_INCLUDE_DIRS})
-target_link_libraries(bugme-cli PRIVATE ${LIBELF_LIBRARIES} ${CAPSTONE_LIBRARIES})
+add_executable(
+  bugme-cli
+  ${SOURCES}
+)
+
+target_include_directories(
+  bugme-cli PRIVATE
+  include
+  ${LIBELF_INCLUDE_DIRS}
+  ${CAPSTONE_INCLUDE_DIRS}
+)
+target_link_libraries(
+  bugme-cli PRIVATE
+  ${LIBELF_LIBRARIES}
+  ${CAPSTONE_LIBRARIES}
+)
