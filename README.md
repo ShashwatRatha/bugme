@@ -105,7 +105,7 @@ main.cpp
 scripts/build
 ```
 
-Output: `bin/bugme`
+Output: `bin/bugme-cli`
 
 ---
 
@@ -126,7 +126,7 @@ gcc -g -O0 -no-pie -o target target.c
 Run under the debugger:
 
 ```bash
-./bin/bugme ./target
+./bin/bugme-cli ./target
 ```
 
 ### Commands

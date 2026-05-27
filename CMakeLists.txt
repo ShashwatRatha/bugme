@@ -14,8 +14,8 @@ pkg_check_modules(CAPSTONE REQUIRED capstone)
 
 file(
   GLOB SOURCES
-  "src/cli/*.c"
-  "src/cli/*.cpp"
+  "src/cli/src/*.c"
+  "src/cli/src/*.cpp"
 )
 
 add_executable(
@@ -25,7 +25,7 @@ add_executable(
 
 target_include_directories(
   bugme-cli PRIVATE
-  include
+  src/cli/include
   ${LIBELF_INCLUDE_DIRS}
   ${CAPSTONE_INCLUDE_DIRS}
 )
