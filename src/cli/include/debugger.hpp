@@ -17,6 +17,12 @@
 class Debugger {
  public:
   Debugger(const char *program, char *const argv[]);
+  Debugger() = delete;
+  Debugger(const Debugger &) = delete;
+  Debugger(Debugger &&) = delete;
+  Debugger &operator=(const Debugger &) = delete;
+  Debugger &operator=(Debugger &&) = delete;
+
   void run();
 
  private:

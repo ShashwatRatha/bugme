@@ -2,6 +2,7 @@
 #define ELF_PARSER_HPP_
 
 #include <gelf.h>
+#include <libelf.h>
 #include <sys/types.h>
 
 #include <cstddef>
@@ -18,11 +19,14 @@
  */
 class ElfParser {
  public:
+  ElfParser() = delete;
   explicit ElfParser(const std::string& executablePath);
   ~ElfParser();
 
   ElfParser(const ElfParser&) = delete;
+  ElfParser(ElfParser&&) = delete;
   ElfParser& operator=(const ElfParser&) = delete;
+  ElfParser& operator=(ElfParser&&) = delete;
 
   /**
    * @brief Looks up a symbol name in the .symtab (and optionally .dynsym).

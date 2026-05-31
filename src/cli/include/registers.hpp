@@ -31,7 +31,12 @@ enum class Regs {
 
 class Registers {
  public:
-  Registers(pid_t pid);
+  explicit Registers(pid_t pid);
+  Registers() = delete;
+  Registers(const Registers&) = delete;
+  Registers& operator=(const Registers&) = delete;
+  Registers(Registers&&) = delete;
+  Registers& operator=(Registers&&) = delete;
 
   void getRegs();
   void setRegs(user_regs_struct& regs);

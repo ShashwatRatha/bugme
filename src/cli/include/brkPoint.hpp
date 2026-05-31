@@ -9,10 +9,12 @@ class BreakPoint {
  public:
   // constructors and destructor
   BreakPoint(pid_t pid, std::uint64_t addr);
-  BreakPoint(const BreakPoint&) = default;
-  BreakPoint& operator=(const BreakPoint&) = default;
-  BreakPoint(BreakPoint&&) = default;
-  BreakPoint& operator=(BreakPoint&&) = default;
+  BreakPoint() = delete;
+  BreakPoint(const BreakPoint&) = delete;
+  BreakPoint& operator=(const BreakPoint&) = delete;
+  BreakPoint(BreakPoint&&) =
+      default;  // unordered_map required MoveConstructible keys and values
+  BreakPoint& operator=(BreakPoint&&) = delete;
   ~BreakPoint() = default;
 
   // getters
