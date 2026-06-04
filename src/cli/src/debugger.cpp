@@ -146,13 +146,15 @@ void Debugger::renderDisassembly(const uint64_t& addr, const size_t& num) {
 
   if (auto it = mAddrInsn.find(lookupAddr); it != mAddrInsn.end()) {
     auto ndx = it->second;
+    auto ptr = 0;
     for (auto idx = ndx;
          idx < std::min(num + ndx + 1, mDisasInstructions.size()); idx++) {
       bool isRIP = mDisasInstructions[idx].addr == (rip - offset);
       bool isBRK = mBrkPoints.count(mDisasInstructions[idx].addr + offset) > 0;
-      printf("%s%s0x%016lx: %s\n", isBRK ? " " : "  ", isRIP ? "▶ " : "  ",
-             mDisasInstructions[idx].addr,
+      printf("%s%s0x%016lx <+%d>: %s\n", isBRK ? " " : "  ",
+             isRIP ? "▶ " : "  ", mDisasInstructions[idx].addr, ptr,
              mDisasInstructions[idx].instruction.c_str());
+      ptr += mDisasInstructions[idx].size;
     }
   } else {
     std::cerr << "lookup at 0x" << std::hex << lookupAddr << " is invalid.\n";
