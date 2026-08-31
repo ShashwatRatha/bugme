@@ -45,9 +45,9 @@ Debugger::Debugger(const char* program, char* const argv[])
       mElf(program),
       mPExited(false),
       mRegs(mPid),
-      mDisas(),
+      // mDisas(),
       mAddrInsn(),
-      mDisasInstructions(),
+      // mDisasInstructions(),
       mCommands(),
       mBrkPoints() {
   loadCommands();
