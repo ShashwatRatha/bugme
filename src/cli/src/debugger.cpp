@@ -3,7 +3,6 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#include <cctype>
 #include <csignal>
 #include <cstdint>
 #include <cstdio>
@@ -255,7 +254,9 @@ void Debugger::handleTRAP() {
     mRegs.setRegister(Regs::rip, IP);
 
     ptSingleStep(mPid);
-    wait();
+
+    int status;
+    waitpid(mPid, &status, 0);
 
     brkPoint->second.enableBP();
   }
